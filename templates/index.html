@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dynamic Tableau Visualization</title>
+    <script type="text/javascript" src="https://public.tableau.com/javascripts/api/tableau-2.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Dynamic Tableau Visualization</h1>
+    </header>
+
+    <div class="container">
+        <div class="filters">
+            <h2>Custom Filters</h2>
+
+            <div class="filter-group">
+                <label for="Masa Studi">Masa Studi</label>
+                <select id="Masa Studi" class="filter-dropdown" data-filter="Masa Studi">
+                    <option value="">-- Select --</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="Tempat Lahir">Tempat Lahir</label>
+                <select id="Tempat Lahir" class="filter-dropdown" data-filter="Tempat Lahir">
+                    <option value="">-- Select --</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="Pembimbing Skripsi I">Pembimbing Skripsi I</label>
+                <select id="Pembimbing Skripsi I" class="filter-dropdown" data-filter="Pembimbing Skripsi I">
+                    <option value="">-- Select --</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="Pembimbing Skripsi II">Pembimbing Skripsi II</label>
+                <select id="Pembimbing Skripsi II" class="filter-dropdown" data-filter="Pembimbing Skripsi II">
+                    <option value="">-- Select --</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="Predikat Kelulusan">Predikat Kelulusan</label>
+                <select id="Predikat Kelulusan" class="filter-dropdown" data-filter="Predikat Kelulusan">
+                    <option value="">-- Select --</option>
+                </select>
+            </div>
+
+            <button id="applyFilters">Apply Filters</button>
+        </div>
+
+        <div class="viz-container" id="vizContainer"></div>
+    </div>
+
+    <script>
+        let viz;
+
+        function initViz() {
+            const containerDiv = document.getElementById('vizContainer');
+            const url = 'https://public.tableau.com/views/VisualisasiKelulusan/Dashboard1?:language=en-US&:display_count=n&:origin=viz_share_link'; // Replace with your Tableau Public viz URL
+            const options = {
+                width: containerDiv.offsetWidth,
+                height: containerDiv.offsetHeight,
+                hideTabs: true,
+                hideToolbar: true
+            };
+            viz = new tableau.Viz(containerDiv, url, options);
+        }
+
+        async function fetchOptions(columnName) {
+            const response = await fetch(`/get-options?columnName=${columnName}`);
+            const options = await response.json();
+            return options;
+        }
+
+        async function populateDropdowns() {
+            const dropdowns = document.querySelectorAll('.filter-dropdown');
+            for (const dropdown of dropdowns) {
+                const columnName = dropdown.id.replace(/ /g, '_');
+                const options = await fetchOptions(columnName);
+                options.forEach(option => {
+                    const opt = document.createElement('option');
+                    opt.value = option;
+                    opt.text = option;
+                    dropdown.appendChild(opt);
+                });
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            initViz();
+            populateDropdowns();
+
+            document.getElementById('applyFilters').addEventListener('click', function() {
+                const filters = getSelectedFilters();
+                applyFilters(filters);
+            });
+        });
+
+        function getSelectedFilters() {
+            const filterDropdowns = document.querySelectorAll('.filter-dropdown');
+            const filters = {};
+
+            filterDropdowns.forEach(dropdown => {
+                const selectedValue = dropdown.value;
+                if (selectedValue) {
+                    const filterName = dropdown.getAttribute('data-filter');
+                    if (!filters[filterName]) {
+                        filters[filterName] = [];
+                    }
+                    filters[filterName].push(selectedValue);
+                }
+            });
+
+            return filters;
+        }
+
+        function applyFilters(filters) {
+            if (viz) {
+                const workbook = viz.getWorkbook();
+                const activeSheet = workbook.getActiveSheet();
+
+                for (const [filterName, filterValues] of Object.entries(filters)) {
+                    activeSheet.applyFilterAsync(filterName, filterValues, tableau.FilterUpdateType.REPLACE);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
