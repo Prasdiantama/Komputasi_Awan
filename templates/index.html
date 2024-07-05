@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Dynamic Tableau Visualization</title>
-    <script type="text/javascript" src="https://public.tableau.com/javascripts/api/tableau-2.min.js"></script>
+    <script type="text/javascript" src="https://public.tableau.com/javascripts/api/tableau-2.9.2.min.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -16,44 +16,50 @@
             <h2>Custom Filters</h2>
 
             <div class="filter-group">
-                <label for="Masa Studi">Masa Studi</label>
-                <select id="Masa Studi" class="filter-dropdown" data-filter="Masa Studi">
+                <label for="MasaStudi">Masa Studi</label>
+                <select id="MasaStudi" class="filter-dropdown" data-filter="MasaStudi">
                     <option value="">-- Select --</option>
                 </select>
             </div>
 
             <div class="filter-group">
-                <label for="Tempat Lahir">Tempat Lahir</label>
-                <select id="Tempat Lahir" class="filter-dropdown" data-filter="Tempat Lahir">
+                <label for="TempatLahir">Tempat Lahir</label>
+                <select id="TempatLahir" class="filter-dropdown" data-filter="TempatLahir">
                     <option value="">-- Select --</option>
                 </select>
             </div>
 
             <div class="filter-group">
-                <label for="Pembimbing Skripsi I">Pembimbing Skripsi I</label>
-                <select id="Pembimbing Skripsi I" class="filter-dropdown" data-filter="Pembimbing Skripsi I">
+                <label for="PembimbingSkripsiI">Pembimbing Skripsi I</label>
+                <select id="PembimbingSkripsiI" class="filter-dropdown" data-filter="PembimbingSkripsiI">
                     <option value="">-- Select --</option>
                 </select>
             </div>
 
             <div class="filter-group">
-                <label for="Pembimbing Skripsi II">Pembimbing Skripsi II</label>
-                <select id="Pembimbing Skripsi II" class="filter-dropdown" data-filter="Pembimbing Skripsi II">
+                <label for="PembimbingSkripsiII">Pembimbing Skripsi II</label>
+                <select id="PembimbingSkripsiII" class="filter-dropdown" data-filter="PembimbingSkripsiII">
                     <option value="">-- Select --</option>
                 </select>
             </div>
 
             <div class="filter-group">
-                <label for="Predikat Kelulusan">Predikat Kelulusan</label>
-                <select id="Predikat Kelulusan" class="filter-dropdown" data-filter="Predikat Kelulusan">
+                <label for="PredikatKelulusan">Predikat Kelulusan</label>
+                <select id="PredikatKelulusan" class="filter-dropdown" data-filter="PredikatKelulusan">
                     <option value="">-- Select --</option>
                 </select>
             </div>
 
             <button id="applyFilters">Apply Filters</button>
+            <button id="newViz">Reset</button>
         </div>
 
         <div class="viz-container" id="vizContainer"></div>
+        
+        <div class="stats-container">
+            <p>Total Mahasiswa: <span id="totalStudents">0</span></p>
+            <p>Rata Rata IPK: <span id="averageGPA">0.00</span></p>
+        </div>
     </div>
 
     <script>
@@ -61,7 +67,7 @@
 
         function initViz() {
             const containerDiv = document.getElementById('vizContainer');
-            const url = 'https://public.tableau.com/views/VisualisasiKelulusan/Dashboard1?:language=en-US&:display_count=n&:origin=viz_share_link'; // Replace with your Tableau Public viz URL
+            const url = 'https://public.tableau.com/views/KelulusanAdiet/Dashboard1?:language=en-US&publish=yes&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link'; // Replace with your Tableau Public viz URL
             const options = {
                 width: containerDiv.offsetWidth,
                 height: containerDiv.offsetHeight,
@@ -69,6 +75,17 @@
                 hideToolbar: true
             };
             viz = new tableau.Viz(containerDiv, url, options);
+            updateStats({});
+        }
+
+        function newViz() {
+            if (viz) {
+                viz.dispose();
+            }
+            document.querySelectorAll('.filter-dropdown').forEach(dropdown => {
+                dropdown.value = '';
+            });
+            initViz();
         }
 
         async function fetchOptions(columnName) {
@@ -80,7 +97,7 @@
         async function populateDropdowns() {
             const dropdowns = document.querySelectorAll('.filter-dropdown');
             for (const dropdown of dropdowns) {
-                const columnName = dropdown.id.replace(/ /g, '_');
+                const columnName = dropdown.id;
                 const options = await fetchOptions(columnName);
                 options.forEach(option => {
                     const opt = document.createElement('option');
@@ -88,6 +105,29 @@
                     opt.text = option;
                     dropdown.appendChild(opt);
                 });
+
+                const label = dropdown.previousElementSibling;
+                label.textContent += ` (${options.length})`;
+            }
+        }
+
+        async function updateStats(filters) {
+            try {
+                const response = await fetch('/get-stats', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ filters })
+                });
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                const stats = await response.json();
+                document.getElementById('totalStudents').textContent = stats.total_students;
+                document.getElementById('averageGPA').textContent = stats.average_gpa ? stats.average_gpa.toFixed(2) : '0.00';
+            } catch (error) {
+                console.error('Error fetching stats:', error);
             }
         }
 
@@ -98,6 +138,12 @@
             document.getElementById('applyFilters').addEventListener('click', function() {
                 const filters = getSelectedFilters();
                 applyFilters(filters);
+                updateStats(filters);
+            });
+
+            document.getElementById('newViz').addEventListener('click', function() {
+                newViz();
+                updateStats({});
             });
         });
 
@@ -124,9 +170,18 @@
                 const workbook = viz.getWorkbook();
                 const activeSheet = workbook.getActiveSheet();
 
-                for (const [filterName, filterValues] of Object.entries(filters)) {
-                    activeSheet.applyFilterAsync(filterName, filterValues, tableau.FilterUpdateType.REPLACE);
-                }
+                // Reset all filters first
+                activeSheet.getWorksheets().forEach(sheet => {
+                    sheet.getFiltersAsync().then(currentFilters => {
+                        const clearPromises = currentFilters.map(filter => sheet.clearFilterAsync(filter.getFieldName()));
+                        Promise.all(clearPromises).then(() => {
+                            // Apply new filters
+                            for (const [filterName, filterValues] of Object.entries(filters)) {
+                                sheet.applyFilterAsync(filterName, filterValues, tableau.FilterUpdateType.REPLACE);
+                            }
+                        });
+                    });
+                });
             }
         }
     </script>

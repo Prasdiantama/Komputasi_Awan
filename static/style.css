@@ -90,3 +90,9 @@ header {
     height: 100%;
     border: none;
 }
+
+.stats-container{
+    position: absolute;
+    bottom: -15%;
+    right: 10%;
+}
